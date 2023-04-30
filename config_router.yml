@@ -1,0 +1,77 @@
+---
+
+- hosts: routers
+  become: true
+  gather_facts: no
+  tasks:
+
+    - name: Configure the Hostname
+      cisco.ios.ios_hostname:
+        config:
+          hostname: Router_Genon1
+        state: merged
+
+    - name: Configure login banner
+      cisco.ios.ios_banner:
+        banner: motd
+        text: |
+          Unauthorized Access is Prohibited!
+        state: present
+
+    - name: configure the console
+      cisco.ios.ios_config:
+        lines:
+        - password cisco
+        - login
+        - logging synchronous
+        parents: line console 0
+
+    - name: Configure interface settings
+      cisco.ios.ios_config:
+        lines:
+        - description test interface
+        - ip address 172.31.1.1 255.255.255.0
+        parents: interface FastEthernet2/0
+
+    - name: Configure ip helpers on multiple interfaces
+      cisco.ios.ios_config:
+        lines:
+        - ip helper-address 172.26.1.10
+        - ip helper-address 172.26.3.8
+        parents: '{{ item }}'
+      with_items:
+      - interface FastEthernet3/0
+      - interface FastEthernet3/1
+      - interface GigabitEthernet4/0
+
+    - name: Load new acl into device
+      cisco.ios.ios_config:
+        lines:
+        - 10 permit ip host 192.0.2.1 any log
+        - 20 permit ip host 192.0.2.2 any log
+        - 30 permit ip host 192.0.2.3 any log
+        - 40 permit ip host 192.0.2.4 any log
+        - 50 permit ip host 192.0.2.5 any log
+        parents: ip access-list extended test
+        before: no ip access-list extended test
+        match: exact
+
+    - name: show running configuration
+      cisco.ios.ios_command:
+        commands: show run
+      register: check_run
+
+    - debug:
+        msg="{{ check_run }}"
+
+    - name: show ip access-list
+      cisco.ios.ios_command:
+        commands: show ip access-list
+      register: acl_run
+
+    - debug:
+        msg="{{ acl_run }}"
+
+    - name: Save running to startup when modified
+      cisco.ios.ios_config:
+        save_when: modified
